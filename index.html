@@ -295,6 +295,12 @@
         .print-only {
             display: none;
         }
+        
+        /* Div to make table scrollable on mobile */
+        .table-wrapper {
+            overflow-x: auto;
+            width: 100%;
+        }
 
         /* Print-specific Styles */
         @page {
@@ -342,6 +348,46 @@
                 text-align: left;
             }
         }
+        
+        /* --- START: Responsive Styles for Mobile Phones --- */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 20px;
+            }
+            .header .header-title {
+                font-size: 22px;
+            }
+
+            /* Stack controls vertically */
+            .date-controls, .entry-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .date-controls .form-group {
+                justify-content: space-between;
+                width: 100%;
+            }
+            .date-controls button {
+                width: 100%;
+            }
+            #addButton {
+                width: 100%;
+                margin-top: 5px;
+            }
+            
+            /* Table adjustments */
+            th, td {
+                padding: 8px;
+            }
+            th {
+                font-size: 14px;
+            }
+        }
+        /* --- END: Responsive Styles for Mobile Phones --- */
+
     </style>
 </head>
 <body>
@@ -397,21 +443,23 @@
         </div>
     </div>
 
-    <table id="logTable">
-        <thead>
-            <tr>
-                <th class="col-seq">ت</th>
-                <th>الاسم</th>
-                <th>جهة النزول</th>
-                <th>الغرض من النزول</th>
-                <th class="col-action no-print">
-                    <button id="clearAllButton">حذف الكل</button>
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            </tbody>
-    </table>
+    <div class="table-wrapper">
+        <table id="logTable">
+            <thead>
+                <tr>
+                    <th class="col-seq">ت</th>
+                    <th>الاسم</th>
+                    <th>جهة النزول</th>
+                    <th>الغرض من النزول</th>
+                    <th class="col-action no-print">
+                        <button id="clearAllButton">حذف الكل</button>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
     
     <div id="print-footer" class="print-only">
         <div style="display: inline-block; text-align: center;">
