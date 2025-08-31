@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <style>
         body {
@@ -296,11 +297,55 @@
             display: none;
         }
         
-        /* Div to make table scrollable on mobile */
         .table-wrapper {
             overflow-x: auto;
             width: 100%;
         }
+
+        /* --- START: Export Modal Styles --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2000;
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 25px 35px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .modal-content h4 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 18px;
+            color: #333;
+        }
+        .modal-content button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Cairo', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+        }
+        #exportAsWordBtn { background-color: #007bff; color: white; }
+        #exportAsWordBtn:hover { background-color: #0056b3; }
+        #exportAsImageBtn { background-color: #28a745; color: white; }
+        #exportAsImageBtn:hover { background-color: #218838; }
+        #closeModalBtn { background-color: #6c757d; color: white; margin-top: 10px; }
+        #closeModalBtn:hover { background-color: #5a6268; }
+        /* --- END: Export Modal Styles --- */
+
 
         /* Print-specific Styles */
         @page {
@@ -361,7 +406,6 @@
                 font-size: 22px;
             }
 
-            /* Stack controls vertically */
             .date-controls, .entry-row {
                 flex-direction: column;
                 align-items: stretch;
@@ -378,7 +422,6 @@
                 margin-top: 5px;
             }
             
-            /* Table adjustments */
             th, td {
                 padding: 8px;
             }
@@ -391,6 +434,16 @@
     </style>
 </head>
 <body>
+
+<div id="exportModal" class="modal-overlay">
+    <div class="modal-content">
+        <h4>اختر صيغة التصدير</h4>
+        <button id="exportAsWordBtn">تصدير كملف Word</button>
+        <button id="exportAsImageBtn">تصدير كصورة PNG</button>
+        <button id="closeModalBtn">إلغاء</button>
+    </div>
+</div>
+
 
 <div class="container">
     <div class="print-only">
@@ -501,8 +554,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const nameInput = document.getElementById('pharmacistName');
     const destInput = document.getElementById('destination');
     const purposeInput = document.getElementById('purpose');
-    const exportButton = document.getElementById('exportButton');
     const printButton = document.getElementById('printButton');
+    
+    // Export elements
+    const exportButton = document.getElementById('exportButton');
+    const exportModal = document.getElementById('exportModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const exportAsWordBtn = document.getElementById('exportAsWordBtn');
+    const exportAsImageBtn = document.getElementById('exportAsImageBtn');
     
     // Sessions elements
     const sessionsButton = document.getElementById('sessionsButton');
@@ -518,19 +577,27 @@ document.addEventListener('DOMContentLoaded', function() {
     function setInitialDate() {
         let today = new Date();
         let dayOfWeek = today.getDay();
-        if (dayOfWeek === 5) { today.setDate(today.getDate() + 2); }
-        else if (dayOfWeek === 6) { today.setDate(today.getDate() + 1); }
-        dayOfWeek = today.getDay();
+        if (dayOfWeek === 5) { today.setDate(today.getDate() + 2); } // If Friday, move to Sunday
+        else if (dayOfWeek === 6) { today.setDate(today.getDate() + 1); } // If Saturday, move to Sunday
+        dayOfWeek = today.getDay(); // Update dayOfWeek after adjustment
         logDateInput.valueAsDate = today;
         logDaySelect.value = dayOfWeek;
     }
 
     logDaySelect.addEventListener('change', function() {
         const selectedDay = parseInt(this.value);
-        let date = new Date();
+        let date = new Date(logDateInput.value); // Use current date as base
         const currentDay = date.getDay();
         const difference = selectedDay - currentDay;
         date.setDate(date.getDate() + difference);
+        
+        // Ensure not Saturday or Friday
+        let newDayOfWeek = date.getDay();
+        if (newDayOfWeek === 5) { // If new date is Friday, move to next Monday
+            date.setDate(date.getDate() + 3);
+        } else if (newDayOfWeek === 6) { // If new date is Saturday, move to next Monday
+            date.setDate(date.getDate() + 2);
+        }
         logDateInput.valueAsDate = date;
     });
 
@@ -538,8 +605,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let selectedDate = new Date(this.value);
         let dayOfWeek = selectedDate.getDay();
         if (dayOfWeek === 5 || dayOfWeek === 6) {
-            alert("لا يمكن تحديد يومي الجمعة والسبت.");
-            setInitialDate();
+            alert("لا يمكن تحديد يومي الجمعة والسبت. سيتم اختيار أقرب يوم عمل.");
+            setInitialDate(); // Reset to current valid working day
             return;
         }
         logDaySelect.value = dayOfWeek;
@@ -860,7 +927,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // --- PRINT LOGIC ---
-    // Helper function to remove temporary rows after printing
     function cleanupPrintRows() {
         document.querySelectorAll('.temp-print-row').forEach(row => row.remove());
         window.removeEventListener('afterprint', cleanupPrintRows);
@@ -873,8 +939,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         printIntro.innerHTML = `نرفع اليكم الموقف اليومي للصيادلة العاملين في وحدة الصيدلة في مستشفانا ليوم <b>${day}</b> التاريخ <b>${date}</b> للتفضل بالموافقة مع التقدير.....`;
 
-        // --- MODIFICATION START ---
-        // Ensure table has 7 rows for printing
         const targetRowCount = 7;
         const currentRowCount = tableBody.rows.length;
         const rowsNeeded = targetRowCount - currentRowCount;
@@ -882,131 +946,131 @@ document.addEventListener('DOMContentLoaded', function() {
         if (rowsNeeded > 0) {
             for (let i = 0; i < rowsNeeded; i++) {
                 const newRow = tableBody.insertRow();
-                newRow.classList.add('temp-print-row'); // Add class for easy removal
-
+                newRow.classList.add('temp-print-row');
                 newRow.insertCell(0).innerHTML = '&nbsp;';
                 newRow.insertCell(1).innerHTML = '&nbsp;';
                 newRow.insertCell(2).innerHTML = '&nbsp;';
                 newRow.insertCell(3).innerHTML = '&nbsp;';
-
-                // Add the hidden cell to maintain column structure
                 const hiddenCell = newRow.insertCell(4);
                 hiddenCell.classList.add('col-action', 'no-print');
                 hiddenCell.innerHTML = '&nbsp;';
             }
         }
-
-        // Listen for the afterprint event to clean up the temporary rows
         window.addEventListener('afterprint', cleanupPrintRows);
-        // --- MODIFICATION END ---
-        
         window.print();
     });
 
 
-    // --- EXPORT TO WORD LOGIC ---
-    exportButton.addEventListener('click', function() {
+    // --- EXPORT LOGIC ---
+    // Helper to load fonts before rendering
+    async function loadWebFont(fontFamily) {
+        if (!document.fonts) return; // Not supported in all browsers
+
+        try {
+            // Check if font is already loaded
+            if (document.fonts.check(`1em ${fontFamily}`)) {
+                console.log(`Font '${fontFamily}' already loaded.`);
+                return;
+            }
+            console.log(`Loading font: ${fontFamily}`);
+            await document.fonts.load(`1em ${fontFamily}`);
+            console.log(`Font '${fontFamily}' loaded successfully.`);
+        } catch (error) {
+            console.error(`Failed to load font '${fontFamily}':`, error);
+        }
+    }
+
+
+    function getReportHTMLContent(day, date, chunks, pageIndex) {
+        let tableHtml = `<table style="width:100%; border-collapse: collapse; table-layout: fixed; font-size: 14pt; margin-top: 2rem;" border="1">
+            <thead>
+                <tr style="background-color:#f2f2f2;">
+                    <th style="padding: 8px; width: 10%; text-align: center;">ت</th>
+                    <th style="padding: 8px; width: 30%; text-align: right;">الاسم</th>
+                    <th style="padding: 8px; width: 30%; text-align: right;">جهة النزول</th>
+                    <th style="padding: 8px; width: 30%; text-align: right;">الغرض من النزول</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        
+        const chunk = chunks[pageIndex];
+        chunk.forEach(row => {
+            tableHtml += `<tr>
+                <td style="padding: 8px; text-align: center;">${row.cells[0].textContent}</td>
+                <td style="padding: 8px; text-align: right;">${row.cells[1].textContent}</td>
+                <td style="padding: 8px; text-align: right;">${row.cells[2].textContent}</td>
+                <td style="padding: 8px; text-align: right;">${row.cells[3].textContent}</td>
+            </tr>`;
+        });
+
+        const emptyRowsNeeded = 7 - chunk.length;
+        for (let i = 0; i < emptyRowsNeeded; i++) {
+            tableHtml += `<tr>
+                <td style="padding: 8px; text-align: center;">&nbsp;</td>
+                <td style="padding: 8px;">&nbsp;</td>
+                <td style="padding: 8px;">&nbsp;</td>
+                <td style="padding: 8px;">&nbsp;</td>
+            </tr>`;
+        }
+        tableHtml += `</tbody></table>`;
+
+        const pageBreak = (pageIndex < chunks.length - 1) ? '<div style="page-break-after: always; height: 1px;"></div>' : '';
+        // Note: Switched to 'Times New Roman' for Word/Image export to ensure font consistency, as Cairo might not be installed on all systems.
+        // If Cairo is essential, it needs to be embedded or handled specially for non-HTML exports.
+        return `
+            <div style="font-family: 'Times New Roman', serif; direction: rtl; font-size: 16pt; color: black; background-color: white; padding: 1in; width: 210mm; min-height: 297mm; box-sizing: border-box;">
+                <div style="text-align: right;">
+                    <p>السيد مدير مستشفى ام قصر المحترم</p>
+                    <p>السيد مدير القسم الفني المحترم</p>
+                </div>
+                <br>
+                <div style="text-align: center;">
+                    <p>م/ موقف العمل الرسمي للصيادلة</p>
+                </div>
+                <br>
+                <div style="text-align: center;">
+                    <p>
+                        نرفع اليكم الموقف اليومي للصيادلة العاملين في وحدة الصيدلة في مستشفانا ليوم <b>${day}</b> 
+                        التاريخ <b>${date}</b> للتفضل بالموافقة مع التقدير.....
+                    </p>
+                </div>
+                <br><br>${tableHtml}<br><br><br>
+                <div style="text-align: left; padding-left: 50px;">
+                    <div style="display: inline-block; text-align: center;">
+                        <p>مدير شعبة الصيدلة</p>
+                        <p>الصيدلاني</p>
+                        <p>مصطفى مهدي ناصر</p>
+                    </div>
+                </div>
+            </div>${pageBreak}`;
+    }
+
+    function exportAsWord() {
         const day = logDaySelect.options[logDaySelect.selectedIndex].text;
         const date = logDateInput.value;
-        if (!date) {
-             alert('الرجاء تحديد التاريخ قبل التصدير.');
-             return;
-        }
-        if (tableBody.rows.length === 0) {
-             alert('لا يمكن تصدير موقف فارغ. الرجاء إضافة صيدلاني واحد على الأقل.');
-             return;
-        }
-
-        saveCurrentSession();
-
+        
         const allHtmlRows = Array.from(tableBody.querySelectorAll('tr'));
         const chunkSize = 7;
-        const chunks = [];
+        let chunks = [];
         for (let i = 0; i < allHtmlRows.length; i += chunkSize) {
             chunks.push(allHtmlRows.slice(i, i + chunkSize));
         }
-        if (chunks.length === 0) chunks.push([]);
+        if (chunks.length === 0) chunks.push([]); // Handle empty table
 
         let allPagesHtml = '';
-        chunks.forEach((chunk, pageIndex) => {
-            let tableHtml = `<table style="width:100%; border-collapse: collapse; table-layout: fixed;" border="1">
-                <thead>
-                    <tr style="background-color:#f2f2f2;">
-                        <th style="padding: 8px; width: 10%;">ت</th>
-                        <th style="padding: 8px; width: 30%;">الاسم</th>
-                        <th style="padding: 8px; width: 30%;">جهة النزول</th>
-                        <th style="padding: 8px; width: 30%;">الغرض من النزول</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-            
-            chunk.forEach(row => {
-                tableHtml += `<tr>
-                    <td style="padding: 8px; text-align: center;">${row.cells[0].textContent}</td>
-                    <td style="padding: 8px; text-align: right;">${row.cells[1].textContent}</td>
-                    <td style="padding: 8px; text-align: right;">${row.cells[2].textContent}</td>
-                    <td style="padding: 8px; text-align: right;">${row.cells[3].textContent}</td>
-                </tr>`;
-            });
-
-            const emptyRowsNeeded = chunkSize - chunk.length;
-            for (let i = 0; i < emptyRowsNeeded; i++) {
-                tableHtml += `<tr>
-                    <td style="padding: 8px; text-align: center;">&nbsp;</td>
-                    <td style="padding: 8px;">&nbsp;</td>
-                    <td style="padding: 8px;">&nbsp;</td>
-                    <td style="padding: 8px;">&nbsp;</td>
-                </tr>`;
-            }
-            
-            tableHtml += `</tbody></table>`;
-            
-            const pageBreak = (pageIndex < chunks.length - 1) ? '<br style="page-break-after: always;">' : '';
-            allPagesHtml += `
-                <div>
-                    <div class="header">
-                        <p>السيد مدير مستشفى ام قصر المحترم</p>
-                        <p>السيد مدير القسم الفني المحترم</p>
-                    </div>
-                    <br>
-                    <div class="subject">
-                        <p>م/ موقف العمل الرسمي للصيادلة</p>
-                    </div>
-                    <br>
-                    <div class="main-body">
-                        <p>
-                            نرفع اليكم الموقف اليومي للصيادلة العاملين في وحدة الصيدلة في مستشفانا ليوم <b>${day}</b> 
-                            التاريخ <b>${date}</b> للتفضل بالموافقة مع التقدير.....
-                        </p>
-                    </div>
-                    <br><br>${tableHtml}<br><br><br>
-                    <div class="signature" style="text-align: left; padding-left: 50px;">
-                        <div style="display: inline-block; text-align: center;">
-                            <p>مدير شعبة الصيدلة</p>
-                            <p>الصيدلاني</p>
-                            <p>مصطفى مهدي ناصر</p>
-                        </div>
-                    </div>
-                </div>${pageBreak}`;
+        chunks.forEach((_, pageIndex) => {
+            allPagesHtml += getReportHTMLContent(day, date, chunks, pageIndex);
         });
 
         const fullHtml = `
             <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-            <head>
-                <meta charset='utf-8'>
-                <title>موقف النزول</title>
-                <style>
-                    @page { size: A4 portrait; margin: 1in; }
-                    body { font-family: 'Times New Roman', serif; direction: rtl; font-size: 16pt; }
-                    p { margin: 0; padding: 0; line-height: 1.5; }
-                    .header { text-align: right; }
-                    .subject, .main-body { text-align: center; }
-                    table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 14pt; }
-                    th, td { border: 1px solid black; padding: 8px; word-wrap: break-word; }
-                </style>
-            </head>
-            <body>${allPagesHtml}</body>
-            </html>`;
+            <head><meta charset='utf-8'><title>موقف النزول</title>
+            <style>
+                @page { size: A4 portrait; margin: 1in; }
+                p { margin: 0; padding: 0; line-height: 1.5; }
+                body { font-family: 'Times New Roman', serif; } /* Ensure font for Word doc */
+            </style>
+            </head><body>${allPagesHtml}</body></html>`;
 
         const blob = new Blob(['\ufeff', fullHtml], { type: 'application/msword' });
         const url = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(fullHtml);
@@ -1022,7 +1086,99 @@ document.addEventListener('DOMContentLoaded', function() {
             downloadLink.click();
         }
         document.body.removeChild(downloadLink);
+    }
+
+    async function exportAsImage() {
+        const day = logDaySelect.options[logDaySelect.selectedIndex].text;
+        const date = logDateInput.value;
+
+        // Ensure Cairo font is loaded before rendering
+        await loadWebFont('Cairo');
+        // If Times New Roman is also used in export HTML, load it too (though it's usually system default)
+        // await loadWebFont('Times New Roman'); 
+
+        const allHtmlRows = Array.from(tableBody.querySelectorAll('tr'));
+        const chunkSize = 7;
+        let chunks = [];
+        for (let i = 0; i < allHtmlRows.length; i += chunkSize) {
+            chunks.push(allHtmlRows.slice(i, i + chunkSize));
+        }
+        if (chunks.length === 0) chunks.push([]);
+
+        const exportContainer = document.createElement('div');
+        exportContainer.style.position = 'absolute';
+        exportContainer.style.left = '-9999px';
+        exportContainer.style.top = '0';
+        exportContainer.style.width = '210mm'; // Set a fixed width for A4
+        exportContainer.style.backgroundColor = 'white'; // Explicit background
+        document.body.appendChild(exportContainer);
+
+        let combinedHtml = '';
+        chunks.forEach((_, pageIndex) => {
+            combinedHtml += getReportHTMLContent(day, date, chunks, pageIndex);
+        });
+        exportContainer.innerHTML = combinedHtml;
+        
+        try {
+            // Give browser a moment to render the added content, especially for fonts
+            await new Promise(resolve => setTimeout(resolve, 100)); 
+
+            const canvas = await html2canvas(exportContainer, { // Capture the entire container
+                scale: 2, // Increase resolution for better quality
+                useCORS: true, // Important for external resources like Google Fonts
+                logging: true, // Enable logging to console for more details
+                backgroundColor: '#ffffff', // Explicitly set background color
+                // scrollY: -window.scrollY, // Adjust scroll if content is off-screen
+                // scrollX: -window.scrollX,
+                windowWidth: exportContainer.scrollWidth,
+                windowHeight: exportContainer.scrollHeight
+            });
+            const imgData = canvas.toDataURL('image/png');
+            const downloadLink = document.createElement('a');
+            downloadLink.href = imgData;
+            downloadLink.download = `موقف نزول ${date}.png`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        } catch(e) {
+            console.error('حدث خطأ أثناء إنشاء الصورة:', e); // More specific error message
+            alert('حدث خطأ أثناء إنشاء الصورة. الرجاء مراجعة وحدة التحكم للمزيد من التفاصيل.');
+        } finally {
+            document.body.removeChild(exportContainer);
+        }
+    }
+
+    exportButton.addEventListener('click', () => {
+        exportModal.style.display = 'flex';
     });
+
+    closeModalBtn.addEventListener('click', () => {
+        exportModal.style.display = 'none';
+    });
+
+    exportModal.addEventListener('click', (e) => {
+        if (e.target === exportModal) {
+            exportModal.style.display = 'none';
+        }
+    });
+
+    function runExport(exportFunction) {
+        const date = logDateInput.value;
+        if (!date) {
+             alert('الرجاء تحديد التاريخ قبل التصدير.');
+             return;
+        }
+        if (tableBody.rows.length === 0) {
+             alert('لا يمكن تصدير موقف فارغ. الرجاء إضافة صيدلاني واحد على الأقل.');
+             return;
+        }
+        saveCurrentSession();
+        exportFunction();
+        exportModal.style.display = 'none';
+    }
+
+    exportAsWordBtn.addEventListener('click', () => runExport(exportAsWord));
+    exportAsImageBtn.addEventListener('click', () => runExport(exportAsImage));
 
     // --- AUTO SAVE & LOAD LOGIC ---
     function loadLastState() {
@@ -1049,7 +1205,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.addEventListener('beforeunload', function() {
-        localStorage.setItem('lastWorkingState', generateStateSignature());
+        if (tableBody.rows.length > 0) {
+             localStorage.setItem('lastWorkingState', generateStateSignature());
+        } else {
+             localStorage.removeItem('lastWorkingState');
+        }
     });
 
 
